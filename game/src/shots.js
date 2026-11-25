@@ -4,7 +4,7 @@
 // while the other works, plate it, serve it), so the frame is what a real game
 // looks like and the same seed always gives the same frame.
 
-import { CHOP_SECONDS, FLOOR, INGREDIENTS, PANTRY_BINS, STATIONS, STEP } from './config.js';
+import { CHOP_SECONDS, DISHES, FLOOR, INGREDIENTS, PANTRY_BINS, STATIONS, STEP } from './config.js';
 import { SCREEN_DAY, SCREEN_PLAY, SCREEN_TITLE } from './render.js';
 
 function centre(rect) {
@@ -120,23 +120,45 @@ export function stageShot(name, kitchen, chef) {
   kitchen.startDay(1);
   chef.reset();
   if (name === 'play') {
-    simulate(kitchen, chef, 55);
+    // Freeze the first moment that shows the whole loop at once: a dish
+    // mid-assembly on the plate, something on the grill, and three tickets up.
+    simulate(kitchen, chef, 90, (k) => k.state.plate.length >= 1
+      && k.state.grill.some((slot) => slot)
+      && k.state.orders.length >= 3);
     return { screen: SCREEN_PLAY };
   }
   if (name === 'serve') {
-    simulate(kitchen, chef, 120, (k, c) => c.carrying && c.carrying.type === 'dish');
+    // Freeze the moment Juno carries a plated dish once the score has
+    // already passed the play shot's $57: the serve shot is the same run
+    // later, so its score and timer must read as consistent with it rather
+    // than as a fresh run at $0.
+    simulate(kitchen, chef, 120, (k, c) => k.state.score >= 57 && c.carrying && c.carrying.type === 'dish');
     if (chef.carrying && chef.carrying.type === 'dish') {
-      const point = standPoint('serve');
-      chef.walkTo(point.x, point.y);
-      for (let i = 0; i < 120; i += 1) {
-        chef.update(STEP, 0, 0);
-        kitchen.step(STEP);
-      }
+      // Stage her in front of the pass, dish held high and clear of the
+      // serve window, so the plated dish and "Ring the bell!" are both fully
+      // visible. (Standing on the window's centre hid both in the old shot.)
+      chef.x = 1050;
+      chef.y = 310;
+      chef.targetX = null;
+      chef.targetY = null;
+      chef.moving = false;
+      chef.bob = 0;
     }
     return { screen: SCREEN_PLAY };
   }
   if (name === 'end') {
     simulate(kitchen, chef, 110, (k) => k.state.dayOver);
+    // Vary the tickets behind the summary: the seed leaves three identical
+    // Garden Salads on the board, which reads as repetitive. Stage a real
+    // mixed board (salad, corncup, salad) with varied patience bars.
+    const s = kitchen.state;
+    const mix = ['salad', 'corncup', 'salad'];
+    const patience = [18, 26, 30];
+    s.orders = mix.map((id, i) => {
+      const dish = DISHES.find((d) => d.id === id);
+      return { id: s.nextOrderId + i, dish, patience: patience[i], maxPatience: 30 };
+    });
+    s.nextOrderId += mix.length;
     return { screen: SCREEN_DAY };
   }
   simulate(kitchen, chef, 3);

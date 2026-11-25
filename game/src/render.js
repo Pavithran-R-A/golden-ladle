@@ -188,6 +188,12 @@ export function drawIngredient(ctx, id, x, y, size, state) {
       ctx.stroke();
     }
   }
+  // A soft gloss highlight, so the food reads as fresh and appetising
+  // rather than a flat geometric icon.
+  ctx.fillStyle = 'rgba(255,255,255,0.35)';
+  ctx.beginPath();
+  ctx.arc(-r * 0.35, -r * 0.42, r * 0.2, 0, Math.PI * 2);
+  ctx.fill();
   ctx.restore();
 }
 
@@ -211,28 +217,169 @@ export function createRenderer(canvas) {
     ctx.fillRect(0, 0, FIELD.width, 52);
     ctx.fillStyle = PALETTE.wallTrim;
     ctx.fillRect(0, 52, FIELD.width, 6);
-    // Chequered terracotta floor.
+    // Warm terracotta floor: grout lines plus a deterministic per-tile shade,
+    // so the checkerboard stops reading as flat tan.
     const tile = 64;
     for (let y = 58; y < FIELD.height; y += tile) {
       for (let x = 0; x < FIELD.width; x += tile) {
-        const even = ((x / tile) | 0) % 2 === ((y / tile) | 0) % 2;
+        const tx = (x / tile) | 0;
+        const ty = (y / tile) | 0;
+        const even = tx % 2 === ty % 2;
         ctx.fillStyle = even ? PALETTE.floorLight : PALETTE.floorDark;
         ctx.fillRect(x, y, tile, tile);
+        const hash = ((tx * 31 + ty * 17) % 7) - 3;
+        if (hash !== 0) {
+          ctx.fillStyle = hash > 0 ? 'rgba(255,235,200,0.07)' : 'rgba(120,60,20,0.07)';
+          ctx.fillRect(x, y, tile, tile);
+        }
       }
     }
-    // A round rug in the middle of the floor.
-    ctx.fillStyle = '#a34d3a';
-    ctx.beginPath();
-    ctx.ellipse(640, 385, 190, 110, 0, 0, Math.PI * 2);
+    ctx.strokeStyle = PALETTE.floorGrout;
+    ctx.lineWidth = 2;
+    for (let x = 0; x <= FIELD.width; x += tile) {
+      ctx.beginPath(); ctx.moveTo(x, 58); ctx.lineTo(x, FIELD.height); ctx.stroke();
+    }
+    for (let y = 58; y <= FIELD.height; y += tile) {
+      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(FIELD.width, y); ctx.stroke();
+    }
+    // Pendant lamps hanging over the menu and serve windows, with warm light
+    // pools on the floor below them.
+    for (const lx of [790, 1180]) {
+      const glow = ctx.createRadialGradient(lx, 118, 6, lx, 118, 70);
+      glow.addColorStop(0, 'rgba(255,214,107,0.30)');
+      glow.addColorStop(1, 'rgba(255,214,107,0)');
+      ctx.fillStyle = glow;
+      ctx.beginPath(); ctx.arc(lx, 118, 70, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = '#7a5a3a'; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.moveTo(lx, 0); ctx.lineTo(lx, 72); ctx.stroke();
+      ctx.fillStyle = '#b45a41';
+      ctx.beginPath(); ctx.moveTo(lx - 22, 92); ctx.lineTo(lx + 22, 92); ctx.lineTo(lx + 12, 70); ctx.lineTo(lx - 12, 70); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = '#ffd66b';
+      ctx.beginPath(); ctx.arc(lx, 94, 7, 0, Math.PI * 2); ctx.fill();
+    }
+    // A big patterned rug in the middle of the floor: concentric rings, a
+    // diamond border and a centre medallion, so the middle of the room reads
+    // as a dressed kitchen rather than a bare oval.
+    const rugRings = [
+      [272, 136, '#8f4232'], [238, 118, '#b45a41'], [202, 100, '#d07a52'],
+      [166, 82, '#e8a37c'], [124, 60, '#f2c184'],
+    ];
+    for (const [rx, ry, color] of rugRings) {
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      ctx.ellipse(640, 385, rx, ry, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.fillStyle = '#f7e8c9';
+    for (let i = 0; i < 16; i += 1) {
+      const a = (i / 16) * Math.PI * 2;
+      const dx = 640 + Math.cos(a) * 185; const dy = 385 + Math.sin(a) * 91;
+      ctx.save(); ctx.translate(dx, dy); ctx.rotate(a);
+      ctx.fillRect(-6, -3, 12, 6); ctx.restore();
+    }
+    ctx.strokeStyle = '#8f4232'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.ellipse(640, 385, 148, 73, 0, 0, Math.PI * 2); ctx.stroke();
+    // A central island counter on the rug: a gingham-topped work table with a
+    // stack of plates, a vase of sunflowers, a bowl of tomatoes and a ladle.
+    // It is drawn in the floor, so Juno walks in front of it, as she does the
+    // counters at the edges.
+    ctx.fillStyle = 'rgba(0,0,0,0.15)';
+    ctx.beginPath(); ctx.ellipse(640, 396, 155, 9, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = PALETTE.counterWood;
+    rr(ctx, 490, 330, 300, 62, 8);
     ctx.fill();
-    ctx.fillStyle = '#c96a4f';
-    ctx.beginPath();
-    ctx.ellipse(640, 385, 150, 84, 0, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(0,0,0,0.18)';
+    rr(ctx, 496, 372, 288, 12, 4);
     ctx.fill();
-    ctx.fillStyle = '#e8a37c';
-    ctx.beginPath();
-    ctx.ellipse(640, 385, 104, 56, 0, 0, Math.PI * 2);
+    ctx.fillStyle = '#f7e8c9';
+    rr(ctx, 494, 320, 292, 22, 6);
     ctx.fill();
+    ctx.fillStyle = 'rgba(178,58,48,0.55)';
+    for (let gx = 508; gx < 770; gx += 24) ctx.fillRect(gx, 320, 12, 22);
+    ctx.fillRect(494, 328, 292, 6);
+    for (let p = 0; p < 3; p += 1) {
+      ctx.fillStyle = '#fff8ec';
+      ctx.beginPath(); ctx.ellipse(534, 330 - p * 3, 24, 6, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = '#c9b18a'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.ellipse(534, 330 - p * 3, 24, 6, 0, 0, Math.PI * 2); ctx.stroke();
+    }
+    ctx.fillStyle = '#4a7a5a';
+    ctx.beginPath(); ctx.moveTo(630, 332); ctx.lineTo(640, 332); ctx.lineTo(638, 318); ctx.lineTo(632, 318); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = '#3f6a4c'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(635, 318); ctx.lineTo(628, 300); ctx.moveTo(635, 318); ctx.lineTo(642, 300); ctx.stroke();
+    for (const [fx, fy] of [[628, 296], [642, 296], [635, 290]]) {
+      ctx.fillStyle = '#f2c230';
+      for (let pp = 0; pp < 6; pp += 1) {
+        const a = (pp / 6) * Math.PI * 2;
+        ctx.beginPath(); ctx.ellipse(fx + Math.cos(a) * 5, fy + Math.sin(a) * 5, 4, 2.5, a, 0, Math.PI * 2); ctx.fill();
+      }
+      ctx.fillStyle = '#a9713f';
+      ctx.beginPath(); ctx.arc(fx, fy, 3, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.fillStyle = '#8a5a2e';
+    ctx.beginPath(); ctx.ellipse(720, 334, 26, 10, 0, 0, Math.PI); ctx.fill();
+    ctx.fillStyle = '#d94f3d';
+    ctx.beginPath(); ctx.arc(708, 328, 7, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(724, 326, 7, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(738, 329, 6, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.35)';
+    ctx.beginPath(); ctx.arc(706, 325, 2, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(722, 323, 2, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = '#8a8a8a'; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(762, 326); ctx.lineTo(780, 334); ctx.stroke();
+    ctx.fillStyle = '#b8b8b8';
+    ctx.beginPath(); ctx.arc(782, 335, 5, 0, Math.PI * 2); ctx.fill();
+    // A low prep island on the left of the floor, with bowls of ingredients.
+    // It is drawn in the floor, so Juno walks in front of it, as she does
+    // the counters at the edges.
+    ctx.fillStyle = PALETTE.counterWood;
+    rr(ctx, 60, 300, 200, 84, 8);
+    ctx.fill();
+    ctx.fillStyle = PALETTE.counterTop;
+    rr(ctx, 60, 300, 200, 14, 8);
+    ctx.fill();
+    for (const [bx, id] of [[100, 'tomato'], [160, 'lettuce'], [220, 'cheese']]) {
+      ctx.fillStyle = '#fff8e7';
+      ctx.beginPath();
+      ctx.arc(bx, 340, 19, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#d8c49a';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(bx, 340, 19, 0, Math.PI * 2);
+      ctx.stroke();
+      drawIngredient(ctx, id, bx, 340, 26, 'raw');
+    }
+    text(ctx, 'PREP', 160, 374, 9, '#e8d9b8', 'center', 'bold');
+    // A short queue of waiting customers along the right edge, so the rush reads.
+    const queue = [
+      { y: 260, shirt: '#5a7fb5' },
+      { y: 315, shirt: '#7a5aa0' },
+      { y: 370, shirt: '#4a8a5a' },
+      { y: 425, shirt: '#d4a017', vip: true },
+    ];
+    for (const q of queue) {
+      const qx = 1218;
+      ctx.fillStyle = q.shirt;
+      rr(ctx, qx - 13, q.y, 26, 30, 10);
+      ctx.fill();
+      ctx.fillStyle = '#f2c9a0';
+      ctx.beginPath();
+      ctx.arc(qx, q.y - 10, 13, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#3a2a1a';
+      ctx.beginPath();
+      ctx.arc(qx - 5, q.y - 11, 1.6, 0, Math.PI * 2);
+      ctx.arc(qx + 5, q.y - 11, 1.6, 0, Math.PI * 2);
+      ctx.fill();
+      if (q.vip) {
+        ctx.fillStyle = '#f2c230';
+        ctx.beginPath();
+        ctx.moveTo(qx - 9, q.y - 20); ctx.lineTo(qx - 9, q.y - 28); ctx.lineTo(qx - 3, q.y - 23);
+        ctx.lineTo(qx, q.y - 29); ctx.lineTo(qx + 3, q.y - 23); ctx.lineTo(qx + 9, q.y - 28); ctx.lineTo(qx + 9, q.y - 20);
+        ctx.closePath(); ctx.fill();
+      }
+    }
   }
 
   function drawMenuBoard() {
@@ -306,6 +453,26 @@ export function createRenderer(canvas) {
       ctx.fill();
       text(ctx, 'Ring the bell!', s.x + 120, s.y + 62, 12, '#a33c2e', 'center', 'bold');
     }
+    // A pass shelf under the window, with plates waiting to be filled.
+    ctx.fillStyle = PALETTE.counterWood;
+    rr(ctx, s.x, s.y + s.height + 6, s.width, 12, 4);
+    ctx.fill();
+    for (let i = 0; i < 3; i += 1) {
+      const px = s.x + 48 + i * 62;
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.ellipse(px, s.y + s.height + 4, 18, 4, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#d8c49a';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.ellipse(px, s.y + s.height + 4, 18, 4, 0, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.fillStyle = '#fdf6e3';
+      ctx.beginPath();
+      ctx.ellipse(px, s.y + s.height + 1, 13, 3, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
   }
 
   function drawBoard(state) {
@@ -316,7 +483,9 @@ export function createRenderer(canvas) {
     ctx.fillStyle = PALETTE.board;
     rr(ctx, s.x + 14, s.y + 14, s.width - 28, s.height - 28, 6);
     ctx.fill();
-    text(ctx, 'CHOP', s.x + s.width / 2, s.y + 14, 11, '#8a5a2e', 'center', 'bold');
+    // The label sits on the wooden top edge, in light cream: at s.y+14 it
+    // straddled the inner board's top edge and read as half-cut.
+    text(ctx, 'CHOP', s.x + s.width / 2, s.y + 7, 10, '#e8d9b8', 'center', 'bold');
     if (state.board) {
       const item = state.board.item;
       const progress = Math.min(1, state.board.progress / CHOP_SECONDS);
@@ -380,6 +549,18 @@ export function createRenderer(canvas) {
         if (cooking.item.state === 'burnt') text(ctx, 'BURNT!', cx, cy - 44, 11, '#ff8a7a', 'center', 'bold');
       }
     }
+    // Steam wisps rising off any occupied slot, so the grill reads as hot
+    // even in a still screenshot (the live game also puffs steam particles).
+    for (let slot = 0; slot < 2; slot += 1) {
+      if (!state.grill[slot]) continue;
+      const cx = s.x + 80 + slot * 160;
+      for (let w = 0; w < 3; w += 1) {
+        ctx.fillStyle = `rgba(255,248,231,${(0.14 + w * 0.05).toFixed(2)})`;
+        ctx.beginPath();
+        ctx.arc(cx + (w - 1) * 10, s.y - 8 - w * 16, 9 + w * 2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
   }
 
   function drawPlating(state) {
@@ -394,17 +575,17 @@ export function createRenderer(canvas) {
     const plateXs = [s.x + 60, s.x + 120, s.x + 180];
     state.plate.forEach((item, i) => {
       const px = plateXs[i];
-      const py = s.y + 58;
+      const py = s.y + 56;
       ctx.fillStyle = '#ffffff';
       ctx.beginPath();
-      ctx.arc(px, py, 24, 0, Math.PI * 2);
+      ctx.arc(px, py, 26, 0, Math.PI * 2);
       ctx.fill();
       ctx.strokeStyle = '#d8c49a';
       ctx.lineWidth = 2;
       ctx.beginPath();
-      ctx.arc(px, py, 24, 0, Math.PI * 2);
+      ctx.arc(px, py, 26, 0, Math.PI * 2);
       ctx.stroke();
-      drawIngredient(ctx, item.ingredient, px, py, 30, item.state);
+      drawIngredient(ctx, item.ingredient, px, py, 32, item.state);
     });
     if (state.plateDish) {
       ctx.fillStyle = '#ffe9a8';
@@ -414,12 +595,12 @@ export function createRenderer(canvas) {
     } else if (state.plate.length === 0) {
       ctx.fillStyle = '#ffffff';
       ctx.beginPath();
-      ctx.arc(s.x + 120, s.y + 58, 24, 0, Math.PI * 2);
+      ctx.arc(s.x + 120, s.y + 56, 26, 0, Math.PI * 2);
       ctx.fill();
       ctx.strokeStyle = '#d8c49a';
       ctx.lineWidth = 2;
       ctx.beginPath();
-      ctx.arc(s.x + 120, s.y + 58, 24, 0, Math.PI * 2);
+      ctx.arc(s.x + 120, s.y + 56, 26, 0, Math.PI * 2);
       ctx.stroke();
     }
   }
@@ -435,10 +616,16 @@ export function createRenderer(canvas) {
     text(ctx, 'TRASH', s.x + s.width / 2, s.y + s.height - 12, 10, '#5a6a78', 'center', 'bold');
   }
 
-  function drawChef(chef) {
+  function drawChef(chef, hurried) {
     const bob = chef.moving ? Math.sin(chef.bob) * 3 : 0;
     const x = chef.x;
     const y = chef.y + bob * 0.3;
+    // Juno is drawn larger than life: at 1280x720 the old sprite read as a
+    // speck, and the dish she carries has to be legible too.
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.scale(1.45, 1.45);
+    ctx.translate(-x, -y);
     ctx.fillStyle = 'rgba(0,0,0,0.25)';
     ctx.beginPath();
     ctx.ellipse(x, y + 24, 24, 7, 0, 0, Math.PI * 2);
@@ -449,6 +636,14 @@ export function createRenderer(canvas) {
     ctx.fill();
     ctx.fillStyle = '#fff8e7';
     rr(ctx, x - 14, y + 2, 28, 20, 8);
+    ctx.fill();
+    // A red neckerchief at her throat, so the apron reads as a uniform.
+    ctx.fillStyle = '#c23a30';
+    ctx.beginPath();
+    ctx.moveTo(x - 10, y - 8);
+    ctx.lineTo(x + 10, y - 8);
+    ctx.lineTo(x, y + 4);
+    ctx.closePath();
     ctx.fill();
     // Head.
     ctx.fillStyle = '#f2c9a0';
@@ -463,16 +658,34 @@ export function createRenderer(canvas) {
     ctx.arc(x + 9, y - 34, 8, 0, Math.PI * 2);
     ctx.fill();
     ctx.fillRect(x - 15, y - 34, 30, 7);
-    // Face.
+    // A sweat drop when a ticket is about to walk out: Juno feels the rush.
+    if (hurried) {
+      ctx.fillStyle = '#7ab8e8';
+      ctx.beginPath();
+      ctx.arc(x + 15, y - 32, 3.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(x + 15, y - 38);
+      ctx.lineTo(x + 11.5, y - 31);
+      ctx.lineTo(x + 18.5, y - 31);
+      ctx.closePath();
+      ctx.fill();
+    }
+    // Face: bigger smile, rosy cheeks.
     ctx.fillStyle = '#3a2a1a';
     ctx.beginPath();
     ctx.arc(x - 6, y - 21, 2, 0, Math.PI * 2);
     ctx.arc(x + 6, y - 21, 2, 0, Math.PI * 2);
     ctx.fill();
+    ctx.fillStyle = 'rgba(242,120,110,0.55)';
+    ctx.beginPath();
+    ctx.arc(x - 11, y - 15, 3.5, 0, Math.PI * 2);
+    ctx.arc(x + 11, y - 15, 3.5, 0, Math.PI * 2);
+    ctx.fill();
     ctx.strokeStyle = '#3a2a1a';
     ctx.lineWidth = 1.6;
     ctx.beginPath();
-    ctx.arc(x, y - 17, 5, 0.15 * Math.PI, 0.85 * Math.PI);
+    ctx.arc(x, y - 17, 6, 0.15 * Math.PI, 0.85 * Math.PI);
     ctx.stroke();
     // Arms.
     ctx.strokeStyle = '#e4574b';
@@ -510,6 +723,7 @@ export function createRenderer(canvas) {
         drawIngredient(ctx, chef.carrying.ingredient, x, cy, 30, chef.carrying.state);
       }
     }
+    ctx.restore();
   }
 
   function drawTicket(order, index) {
@@ -574,7 +788,9 @@ export function createRenderer(canvas) {
     for (let i = 0; i < 3; i += 1) {
       text(ctx, '♥', 1000 + i * 30, 27, 22, i < state.hearts ? '#ff6b6b' : '#5a4632', 'center', 'bold');
     }
-    text(ctx, `TOTAL $${state.total}`, 1150, 26, 15, '#ffd66b', 'center', 'bold');
+    // The running total across all days so far, today included: on day 1 the
+    // old "TOTAL $0" sat next to "SCORE $57" and read as a bug.
+    text(ctx, `TOTAL $${state.total + state.score}`, 1150, 26, 15, '#ffd66b', 'center', 'bold');
   }
 
   function drawPings(state) {
@@ -597,7 +813,8 @@ export function createRenderer(canvas) {
     drawTrash();
     // Ticket row.
     state.orders.forEach((order, i) => drawTicket(order, i));
-    drawChef(chef);
+    const hurried = state.orders.some((o) => o.patience / o.maxPatience <= 0.25);
+    drawChef(chef, hurried);
     drawPings(state);
   }
 
@@ -620,26 +837,24 @@ export function createRenderer(canvas) {
   }
 
   function drawTitle(state, best) {
-    drawKitchen(state, { x: 640, y: 420, moving: false, bob: 0, facing: 1, carrying: null });
+    // Juno stands by the pass, clear of the START button, instead of hiding behind it.
+    drawKitchen(state, { x: 1010, y: 440, moving: false, bob: 0, facing: 1, carrying: null });
     ctx.fillStyle = 'rgba(40,24,12,0.45)';
     ctx.fillRect(0, 0, FIELD.width, FIELD.height);
-    text(ctx, GAME_TITLE, 640, 180, 72, '#ffd66b', 'center', 'bold');
-    ctx.strokeStyle = '#7a4d12';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(340, 215);
-    ctx.lineTo(940, 215);
-    ctx.stroke();
-    text(ctx, "Chef Juno's street-food rush", 640, 245, 26, '#fff8e7', 'center', 'normal');
-    text(ctx, 'Take orders. Chop, grill, plate, serve. Beat the clock.', 640, 290, 20, '#ffe9c4', 'center', 'normal');
-    text(ctx, 'WASD / arrows or click to move  •  Space / E or click a station to use it', 640, 340, 17, '#fff8e7', 'center', 'normal');
-    text(ctx, '4 dishes  •  3 days  •  feed the rush, keep your combo alive', 640, 372, 17, '#fff8e7', 'center', 'normal');
-    if (best > 0) text(ctx, `Best total: $${best}`, 640, 412, 18, '#ffd66b', 'center', 'bold');
+    // No solid band: the title sits in the middle of the dimmed kitchen with
+    // a dark shadow, so the pantry bins, the menu board and the serve window
+    // stay visible at the top of the frame.
+    text(ctx, GAME_TITLE, 643, 298, 72, '#2a1a0c', 'center', 'bold');
+    text(ctx, GAME_TITLE, 640, 295, 72, '#ffd66b', 'center', 'bold');
+    text(ctx, "Chef Juno's street-food rush", 640, 350, 26, '#fff8e7', 'center', 'normal');
+    text(ctx, 'Take orders. Chop, grill, plate, serve. Beat the clock.', 640, 388, 20, '#ffe9c4', 'center', 'normal');
+    text(ctx, 'WASD / arrows or click to move  •  Space / E or click a station to use it', 640, 418, 17, '#fff8e7', 'center', 'normal');
+    text(ctx, '4 dishes  •  3 days  •  feed the rush, keep your combo alive', 640, 443, 17, '#fff8e7', 'center', 'normal');
     ctx.fillStyle = '#e4574b';
-    rr(ctx, 500, 450, 280, 56, 28);
+    rr(ctx, 500, 458, 280, 56, 28);
     ctx.fill();
-    text(ctx, '▶  START COOKING', 640, 479, 22, '#fff8e7', 'center', 'bold');
-    text(ctx, 'Press Enter or click anywhere', 640, 530, 15, '#ffe9c4', 'center', 'normal');
+    text(ctx, '▶  START COOKING', 640, 487, 22, '#fff8e7', 'center', 'bold');
+    text(ctx, 'Press Enter or click anywhere', 640, 540, 15, '#ffe9c4', 'center', 'normal');
   }
 
   function drawDaySummary(state) {
