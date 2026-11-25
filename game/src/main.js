@@ -12,6 +12,7 @@ import { createAudio } from './audio.js';
 import { createChef } from './chef.js';
 import { createParticles } from './particles.js';
 import {
+  EVENT_BELL,
   EVENT_BURNT,
   EVENT_CHOP_DONE,
   EVENT_DAY_END,
@@ -27,8 +28,8 @@ import {
   createKitchen,
   nearestStation,
 } from './kitchen.js';
-import { ACTION_CLICK, ACTION_CONFIRM, ACTION_INTERACT, ACTION_MUTE, ACTION_PAUSE, createInput } from './input.js';
-import { SCREEN_DAY, SCREEN_OVER, SCREEN_PAUSED, SCREEN_PLAY, SCREEN_TITLE, createRenderer } from './render.js';
+import { ACTION_CLICK, ACTION_CONFIRM, ACTION_INTERACT, ACTION_MUTE, ACTION_PAUSE, ACTION_RETRY, createInput } from './input.js';
+import { DAY_BUTTONS, SCREEN_DAY, SCREEN_OVER, SCREEN_PAUSED, SCREEN_PLAY, SCREEN_TITLE, createRenderer } from './render.js';
 import { stageShot } from './shots.js';
 
 /** The longest frame the loop catches up on; a longer stall (a hidden tab) is dropped, not replayed. */
@@ -112,6 +113,24 @@ function runGame() {
     announce(`Day ${kitchen.state.day} complete. Earned $${kitchen.state.score}.`);
   }
 
+  // D9: retry the day just played — the failed day's score must come back
+  // out of the running total first, or retrying would double-count it.
+  function retryDay() {
+    const state = kitchen.state;
+    state.total -= state.score;
+    state.served -= state.dayServed;
+    kitchen.startDay(state.day);
+    chef.reset();
+    screen = SCREEN_PLAY;
+    announce(`Day ${kitchen.state.day}, retry.`);
+  }
+
+  function backToTitle() {
+    resetRun();
+    screen = SCREEN_TITLE;
+    announce(`${GAME_TITLE}. Press Enter or click to start.`);
+  }
+
   function endGameScreen() {
     screen = SCREEN_OVER;
     if (kitchen.state.total > best) {
@@ -144,6 +163,7 @@ function runGame() {
       audio.bell();
       particles.coins(1120, 150);
     }
+    if (events & EVENT_BELL) audio.bell();
     if (events & EVENT_MISS) {
       audio.buzz();
       flash = 1;
@@ -176,6 +196,31 @@ function runGame() {
       return;
     }
     if (screen === SCREEN_DAY) {
+      // D9: R or the RETRY button replays the day; Esc or the TITLE button
+      // goes back to the title; Enter / a click elsewhere advances.
+      if (actions & ACTION_RETRY) {
+        audio.unlock();
+        retryDay();
+        return;
+      }
+      if (actions & ACTION_PAUSE) {
+        audio.unlock();
+        backToTitle();
+        return;
+      }
+      if (click) {
+        const inRect = (r) => click.x >= r.x && click.x <= r.x + r.w && click.y >= r.y && click.y <= r.y + r.h;
+        if (inRect(DAY_BUTTONS.retry)) {
+          audio.unlock();
+          retryDay();
+          return;
+        }
+        if (inRect(DAY_BUTTONS.title)) {
+          audio.unlock();
+          backToTitle();
+          return;
+        }
+      }
       if (actions & (ACTION_CONFIRM | ACTION_CLICK)) {
         audio.unlock();
         if (kitchen.state.day < 3) {
@@ -190,6 +235,11 @@ function runGame() {
       return;
     }
     if (screen === SCREEN_OVER) {
+      if (actions & ACTION_RETRY) {
+        audio.unlock();
+        startGame();
+        return;
+      }
       if (actions & (ACTION_CONFIRM | ACTION_CLICK)) {
         audio.unlock();
         screen = SCREEN_TITLE;

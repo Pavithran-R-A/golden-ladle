@@ -121,10 +121,12 @@ export function stageShot(name, kitchen, chef) {
   chef.reset();
   if (name === 'play') {
     // Freeze the first moment that shows the whole loop at once: a dish
-    // mid-assembly on the plate, something on the grill, and three tickets up.
-    simulate(kitchen, chef, 90, (k) => k.state.plate.length >= 1
+    // mid-assembly on the plate, something on the grill, and tickets up —
+    // after 55 s, so it lands ~2 s before the serve shot (same run, later),
+    // with timer and score reading as consistent between the two shots.
+    simulate(kitchen, chef, 90, (k) => (k.state.plate.length >= 1
       && k.state.grill.some((slot) => slot)
-      && k.state.orders.length >= 3);
+      && k.state.orders.length >= 2 && k.state.elapsed >= 55) || k.state.elapsed >= 62);
     return { screen: SCREEN_PLAY };
   }
   if (name === 'serve') {

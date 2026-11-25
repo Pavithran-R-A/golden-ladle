@@ -5,6 +5,7 @@
 // scaled to fit the window.
 
 import {
+  BURN_SECONDS,
   CHOP_SECONDS,
   DAY_SECONDS,
   DAYS,
@@ -26,6 +27,12 @@ export const SCREEN_PLAY = 'play';
 export const SCREEN_PAUSED = 'paused';
 export const SCREEN_DAY = 'day';
 export const SCREEN_OVER = 'over';
+
+/** D9: clickable buttons on the day-summary screen (logical 1280x720 coords). */
+export const DAY_BUTTONS = {
+  retry: { x: 440, y: 505, w: 180, h: 40 },
+  title: { x: 660, y: 505, w: 180, h: 40 },
+};
 
 function rr(ctx, x, y, w, h, r) {
   ctx.beginPath();
@@ -52,14 +59,32 @@ export function drawIngredient(ctx, id, x, y, size, state) {
   ctx.save();
   ctx.translate(x, y);
   if (state === 'burnt') {
-    ctx.fillStyle = '#2b2b2b';
+    // D6: a charred cob, not a black ball — the darkened corn shape with
+    // kernel dots, char streaks and a smoke wisp rising off it.
+    ctx.fillStyle = '#3d2b18';
     ctx.beginPath();
-    ctx.arc(0, 0, r, 0, Math.PI * 2);
+    ctx.ellipse(0, 0, r * 0.62, r, 0, 0, Math.PI * 2);
     ctx.fill();
-    ctx.fillStyle = '#555';
+    ctx.fillStyle = '#6b4a26';
+    for (let row = -2; row <= 2; row += 1) {
+      for (let col = -1; col <= 1; col += 1) {
+        ctx.beginPath();
+        ctx.arc(col * r * 0.32, row * r * 0.34, r * 0.09, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    ctx.strokeStyle = '#241708';
+    ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.arc(-r * 0.3, -r * 0.3, r * 0.25, 0, Math.PI * 2);
-    ctx.arc(r * 0.3, r * 0.2, r * 0.2, 0, Math.PI * 2);
+    ctx.moveTo(-r * 0.5, -r * 0.5);
+    ctx.lineTo(r * 0.5, r * 0.5);
+    ctx.moveTo(-r * 0.5, r * 0.4);
+    ctx.lineTo(r * 0.4, -r * 0.5);
+    ctx.stroke();
+    ctx.fillStyle = 'rgba(200,200,200,0.5)';
+    ctx.beginPath();
+    ctx.arc(r * 0.25, -r * 1.25, r * 0.22, 0, Math.PI * 2);
+    ctx.arc(r * 0.05, -r * 1.55, r * 0.16, 0, Math.PI * 2);
     ctx.fill();
     ctx.restore();
     return;
@@ -212,7 +237,15 @@ export function createRenderer(canvas) {
   window.addEventListener('resize', resize);
   resize();
 
-  function drawFloor() {
+  function drawFloor(opts) {
+    // opts (title cover only): { islandShift, rugY, rugScale } — the cover
+    // pushes the island down and the rug with it so the gingham tabletop
+    // and sunflowers read below the title block instead of behind it (D7).
+    // In play the defaults keep the v4-verified composition.
+    const o = opts || {};
+    const rugY = o.rugY || 385;
+    const rugScale = o.rugScale || 1;
+    const islandShift = o.islandShift || 14;
     ctx.fillStyle = PALETTE.wall;
     ctx.fillRect(0, 0, FIELD.width, 52);
     ctx.fillStyle = PALETTE.wallTrim;
@@ -259,30 +292,34 @@ export function createRenderer(canvas) {
     }
     // A big patterned rug in the middle of the floor: concentric rings, a
     // diamond border and a centre medallion, so the middle of the room reads
-    // as a dressed kitchen rather than a bare oval.
+    // as a dressed kitchen rather than a bare oval. D7: shrunk ~18% (v3's
+    // 272 rx dominated the cover) so the island and floor read around it.
     const rugRings = [
-      [272, 136, '#8f4232'], [238, 118, '#b45a41'], [202, 100, '#d07a52'],
-      [166, 82, '#e8a37c'], [124, 60, '#f2c184'],
+      [224, 112, '#8f4232'], [195, 97, '#b45a41'], [166, 82, '#d07a52'],
+      [136, 67, '#e8a37c'], [102, 49, '#f2c184'],
     ];
     for (const [rx, ry, color] of rugRings) {
       ctx.fillStyle = color;
       ctx.beginPath();
-      ctx.ellipse(640, 385, rx, ry, 0, 0, Math.PI * 2);
+      ctx.ellipse(640, rugY, rx * rugScale, ry * rugScale, 0, 0, Math.PI * 2);
       ctx.fill();
     }
     ctx.fillStyle = '#f7e8c9';
     for (let i = 0; i < 16; i += 1) {
       const a = (i / 16) * Math.PI * 2;
-      const dx = 640 + Math.cos(a) * 185; const dy = 385 + Math.sin(a) * 91;
+      const dx = 640 + Math.cos(a) * 152 * rugScale; const dy = rugY + Math.sin(a) * 75 * rugScale;
       ctx.save(); ctx.translate(dx, dy); ctx.rotate(a);
       ctx.fillRect(-6, -3, 12, 6); ctx.restore();
     }
     ctx.strokeStyle = '#8f4232'; ctx.lineWidth = 2;
-    ctx.beginPath(); ctx.ellipse(640, 385, 148, 73, 0, 0, Math.PI * 2); ctx.stroke();
+    ctx.beginPath(); ctx.ellipse(640, rugY, 122 * rugScale, 60 * rugScale, 0, 0, Math.PI * 2); ctx.stroke();
     // A central island counter on the rug: a gingham-topped work table with a
     // stack of plates, a vase of sunflowers, a bowl of tomatoes and a ladle.
     // It is drawn in the floor, so Juno walks in front of it, as she does the
-    // counters at the edges.
+    // counters at the edges. D7: shifted 14 px lower so the cover title
+    // clears its gingham top instead of sitting on it.
+    ctx.save();
+    ctx.translate(0, islandShift);
     ctx.fillStyle = 'rgba(0,0,0,0.15)';
     ctx.beginPath(); ctx.ellipse(640, 396, 155, 9, 0, 0, Math.PI * 2); ctx.fill();
     ctx.fillStyle = PALETTE.counterWood;
@@ -329,6 +366,7 @@ export function createRenderer(canvas) {
     ctx.beginPath(); ctx.moveTo(762, 326); ctx.lineTo(780, 334); ctx.stroke();
     ctx.fillStyle = '#b8b8b8';
     ctx.beginPath(); ctx.arc(782, 335, 5, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
     // A low prep island on the left of the floor, with bowls of ingredients.
     // It is drawn in the floor, so Juno walks in front of it, as she does
     // the counters at the edges.
@@ -382,7 +420,7 @@ export function createRenderer(canvas) {
     }
   }
 
-  function drawMenuBoard() {
+  function drawMenuBoard(state) {
     const x = 740;
     const y = 132;
     ctx.fillStyle = '#3a2a1a';
@@ -393,8 +431,12 @@ export function createRenderer(canvas) {
     rr(ctx, x + 4, y + 4, 212, 66, 7);
     ctx.stroke();
     text(ctx, "TODAY'S MENU", x + 110, y + 14, 12, '#ffd66b', 'center', 'bold');
-    const lines = DISHES.slice(0, 3).map((d) => `${d.short}  $${d.price}`);
-    lines.forEach((line, i) => text(ctx, line, x + 110, y + 32 + i * 14, 12, '#fff8e7', 'center', 'normal'));
+    // D5: day-aware — only the dishes available today, in day order
+    // (Day 1: Salad + Corn Cup; Day 2: + Burger; Day 3: + Tofu Bowl).
+    const dishes = DISHES.filter((d) => d.fromDay <= state.day);
+    const step = dishes.length > 3 ? 13 : 14;
+    const first = dishes.length > 3 ? 30 : 32;
+    dishes.forEach((d, i) => text(ctx, `${d.short}  $${d.price}`, x + 110, y + first + i * step, 12, '#fff8e7', 'center', 'normal'));
   }
 
   function drawPantry(state, chef) {
@@ -417,7 +459,12 @@ export function createRenderer(canvas) {
       drawIngredient(ctx, bin.id, bin.x + 26, bin.y + 29, 34, 'raw');
       text(ctx, bin.name, bin.x + 62, bin.y + 29, 12, PALETTE.text, 'center', 'bold');
     }
-    text(ctx, 'PANTRY', s.x + s.width / 2, s.y + s.height - 4, 10, '#e8d9b8', 'center', 'bold');
+    // D7: the label sits on a dark pill now, so it reads clear of the bins'
+    // shadow instead of half-vanishing into the counter's bottom edge.
+    ctx.fillStyle = 'rgba(40,24,12,0.85)';
+    rr(ctx, s.x + s.width / 2 - 42, s.y + s.height - 16, 84, 14, 7);
+    ctx.fill();
+    text(ctx, 'PANTRY', s.x + s.width / 2, s.y + s.height - 9, 10, '#e8d9b8', 'center', 'bold');
   }
 
   function drawServeWindow(state, chef) {
@@ -545,6 +592,16 @@ export function createRenderer(canvas) {
         ctx.fillStyle = cooking.item.state === 'burnt' ? '#2b2b2b' : cooking.item.state === 'grilled' ? PALETTE.green : PALETTE.gold;
         rr(ctx, cx - 30, cy + 40, 60 * progress, 7, 3);
         ctx.fill();
+        // D6: in the last 2 s before burning, the slot ring flashes red so
+        // the player gets a warning instead of a surprise.
+        if (cooking.item.state === 'grilled' && cooking.burnTimer >= BURN_SECONDS - 2
+          && Math.floor(state.elapsed * 4) % 2 === 0) {
+          ctx.strokeStyle = '#ff5a3c';
+          ctx.lineWidth = 4;
+          ctx.beginPath();
+          ctx.arc(cx, cy, 40, 0, Math.PI * 2);
+          ctx.stroke();
+        }
         if (cooking.item.state === 'grilled') text(ctx, 'READY', cx, cy - 44, 11, '#8fe08a', 'center', 'bold');
         if (cooking.item.state === 'burnt') text(ctx, 'BURNT!', cx, cy - 44, 11, '#ff8a7a', 'center', 'bold');
       }
@@ -789,8 +846,10 @@ export function createRenderer(canvas) {
       text(ctx, '♥', 1000 + i * 30, 27, 22, i < state.hearts ? '#ff6b6b' : '#5a4632', 'center', 'bold');
     }
     // The running total across all days so far, today included: on day 1 the
-    // old "TOTAL $0" sat next to "SCORE $57" and read as a bug.
-    text(ctx, `TOTAL $${state.total + state.score}`, 1150, 26, 15, '#ffd66b', 'center', 'bold');
+    // old "TOTAL $0" sat next to "SCORE $57" and read as a bug. D8: once the
+    // day is over, endDay() has already folded the day's score into total,
+    // so adding it again here showed TOTAL = 2x SCORE on the summary.
+    text(ctx, `TOTAL $${state.dayOver ? state.total : state.total + state.score}`, 1150, 26, 15, '#ffd66b', 'center', 'bold');
   }
 
   function drawPings(state) {
@@ -802,9 +861,9 @@ export function createRenderer(canvas) {
     ctx.globalAlpha = 1;
   }
 
-  function drawKitchen(state, chef) {
-    drawFloor();
-    drawMenuBoard();
+  function drawKitchen(state, chef, opts) {
+    drawFloor(opts);
+    drawMenuBoard(state);
     drawPantry(state, chef);
     drawServeWindow(state, chef);
     drawBoard(state);
@@ -838,23 +897,29 @@ export function createRenderer(canvas) {
 
   function drawTitle(state, best) {
     // Juno stands by the pass, clear of the START button, instead of hiding behind it.
-    drawKitchen(state, { x: 1010, y: 440, moving: false, bob: 0, facing: 1, carrying: null });
+    // D7 (v5): the cover pushes the island down (shift 172, rug lower and
+    // 10% smaller) and compacts the title block upward, so the gingham
+    // tabletop, plates, sunflowers, tomato bowl and ladle read in full
+    // BELOW the START button instead of hiding behind the title text.
+    // The "Press Enter" hint moves to the empty floor strip at the bottom.
+    drawKitchen(state, { x: 1010, y: 440, moving: false, bob: 0, facing: 1, carrying: null },
+      { islandShift: 172, rugY: 440, rugScale: 0.9 });
     ctx.fillStyle = 'rgba(40,24,12,0.45)';
     ctx.fillRect(0, 0, FIELD.width, FIELD.height);
     // No solid band: the title sits in the middle of the dimmed kitchen with
     // a dark shadow, so the pantry bins, the menu board and the serve window
     // stay visible at the top of the frame.
-    text(ctx, GAME_TITLE, 643, 298, 72, '#2a1a0c', 'center', 'bold');
-    text(ctx, GAME_TITLE, 640, 295, 72, '#ffd66b', 'center', 'bold');
-    text(ctx, "Chef Juno's street-food rush", 640, 350, 26, '#fff8e7', 'center', 'normal');
-    text(ctx, 'Take orders. Chop, grill, plate, serve. Beat the clock.', 640, 388, 20, '#ffe9c4', 'center', 'normal');
-    text(ctx, 'WASD / arrows or click to move  •  Space / E or click a station to use it', 640, 418, 17, '#fff8e7', 'center', 'normal');
-    text(ctx, '4 dishes  •  3 days  •  feed the rush, keep your combo alive', 640, 443, 17, '#fff8e7', 'center', 'normal');
+    text(ctx, GAME_TITLE, 643, 255, 60, '#2a1a0c', 'center', 'bold');
+    text(ctx, GAME_TITLE, 640, 252, 60, '#ffd66b', 'center', 'bold');
+    text(ctx, "Chef Juno's street-food rush", 640, 296, 26, '#fff8e7', 'center', 'normal');
+    text(ctx, 'Take orders. Chop, grill, plate, serve. Beat the clock.', 640, 326, 20, '#ffe9c4', 'center', 'normal');
+    text(ctx, 'WASD / arrows or click to move  •  Space / E or click a station to use it', 640, 352, 17, '#fff8e7', 'center', 'normal');
+    text(ctx, '4 dishes  •  3 days  •  feed the rush, keep your combo alive', 640, 376, 17, '#fff8e7', 'center', 'normal');
     ctx.fillStyle = '#e4574b';
-    rr(ctx, 500, 458, 280, 56, 28);
+    rr(ctx, 500, 396, 280, 56, 28);
     ctx.fill();
-    text(ctx, '▶  START COOKING', 640, 487, 22, '#fff8e7', 'center', 'bold');
-    text(ctx, 'Press Enter or click anywhere', 640, 540, 15, '#ffe9c4', 'center', 'normal');
+    text(ctx, '▶  START COOKING', 640, 425, 22, '#fff8e7', 'center', 'bold');
+    text(ctx, 'Press Enter or click anywhere', 640, 700, 15, '#ffe9c4', 'center', 'normal');
   }
 
   function drawDaySummary(state) {
@@ -866,7 +931,17 @@ export function createRenderer(canvas) {
     text(ctx, `Served ${state.dayServed}  •  Walked out ${state.missed}`, 640, 352, 18, PALETTE.muted, 'center', 'normal');
     text(ctx, `Best combo x${(1 + 0.25 * Math.min(state.bestCombo, 4)).toFixed(2).replace(/\.?0+$/, '')}`, 640, 380, 18, PALETTE.muted, 'center', 'normal');
     text(ctx, `Star targets: $${STAR_TARGETS[0]} / $${STAR_TARGETS[1]} / $${STAR_TARGETS[2]}`, 640, 412, 15, PALETTE.muted, 'center', 'normal');
-    text(ctx, state.day < DAYS ? 'Press Enter for the next day' : 'Press Enter for your total', 640, 490, 20, '#a33c2e', 'center', 'bold');
+    text(ctx, state.day < DAYS ? 'Press Enter for the next day' : 'Press Enter for your total', 640, 452, 20, '#a33c2e', 'center', 'bold');
+    text(ctx, 'R retries the day  •  Esc goes back to the title', 640, 480, 15, PALETTE.muted, 'center', 'normal');
+    // D9: Retry + Back-to-Title buttons, so a failed day is never a dead end.
+    ctx.fillStyle = '#e4574b';
+    rr(ctx, DAY_BUTTONS.retry.x, DAY_BUTTONS.retry.y, DAY_BUTTONS.retry.w, DAY_BUTTONS.retry.h, 10);
+    ctx.fill();
+    text(ctx, '↻  RETRY DAY', 530, 526, 17, '#fff8e7', 'center', 'bold');
+    ctx.fillStyle = '#5a3d24';
+    rr(ctx, DAY_BUTTONS.title.x, DAY_BUTTONS.title.y, DAY_BUTTONS.title.w, DAY_BUTTONS.title.h, 10);
+    ctx.fill();
+    text(ctx, 'BACK TO TITLE', 750, 526, 17, '#fff8e7', 'center', 'bold');
   }
 
   function drawGameOver(state, best) {

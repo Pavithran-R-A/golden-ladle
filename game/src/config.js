@@ -25,16 +25,16 @@ export const CHEF = {
 };
 
 /** Seconds an order waits before its customer walks away, per day. */
-export const PATIENCE = [30, 26, 22];
+export const PATIENCE = [38, 38, 36];
 /** Seconds between new orders arriving, per day. */
-export const ORDER_GAP = [8, 6.5, 5];
+export const ORDER_GAP = [11, 12, 10];
 /** Most tickets on the board at once. */
 export const MAX_ORDERS = 3;
 
 /** Chopping takes this long; grilling takes this long, then burns after this long again. */
 export const CHOP_SECONDS = 1.2;
 export const GRILL_SECONDS = 3;
-export const BURN_SECONDS = 5;
+export const BURN_SECONDS = 7;
 
 /** Combo: each clean serve in a row adds this much to the multiplier, up to this cap. */
 export const COMBO_STEP = 0.25;

@@ -11,6 +11,7 @@ export const ACTION_PAUSE = 2;
 export const ACTION_INTERACT = 4;
 export const ACTION_MUTE = 8;
 export const ACTION_CLICK = 16;
+export const ACTION_RETRY = 32;
 
 const UP = new Set(['ArrowUp', 'KeyW']);
 const DOWN = new Set(['ArrowDown', 'KeyS']);
@@ -20,6 +21,7 @@ const CONFIRM = new Set(['Space', 'Enter']);
 const INTERACT = new Set(['KeyE']);
 const PAUSE = new Set(['KeyP', 'Escape']);
 const MUTE = new Set(['KeyM']);
+const RETRY = new Set(['KeyR']);
 
 export function createInput(canvas) {
   const keys = { up: false, down: false, left: false, right: false };
@@ -39,6 +41,8 @@ export function createInput(canvas) {
       if (!event.repeat) actions |= ACTION_PAUSE;
     } else if (MUTE.has(event.code)) {
       if (!event.repeat) actions |= ACTION_MUTE;
+    } else if (RETRY.has(event.code)) {
+      if (!event.repeat) actions |= ACTION_RETRY;
     } else return;
     event.preventDefault();
   });

@@ -115,8 +115,13 @@ export function createKitchen(random) {
     missed: 0,
     dayServed: 0,
     orders: [],
-    orderTimer: 3,
+    orderTimer: 5,
     nextOrderId: 1,
+    ordersSpawned: 0,
+    /** Last ticket that walked out: {dishId, at} in game seconds, so a serve
+     * arriving just too late is a "Too late!" (no heart) rather than a
+     * second "Wrong dish!" heart for the same ticket (D3). */
+    lastExpired: null,
     board: null,
     grill: [null, null],
     plate: [],
@@ -140,7 +145,12 @@ export function createKitchen(random) {
 
   function spawnOrder() {
     const dishes = availableDishes();
-    const dish = dishes[Math.floor(random() * dishes.length)];
+    // D4: on Day 3 the Tofu Bowl is the 3rd ticket, so it always appears
+    // while the player still has hearts to cook it — never a 58 s lottery.
+    let dish = dishes[Math.floor(random() * dishes.length)];
+    if (state.day === 3 && state.ordersSpawned === 2) {
+      dish = DISHES.find((d) => d.id === 'tofubowl') || dish;
+    }
     const patience = PATIENCE[state.day - 1] + (random() * 4 - 2);
     state.orders.push({
       id: state.nextOrderId,
@@ -149,6 +159,7 @@ export function createKitchen(random) {
       maxPatience: patience,
     });
     state.nextOrderId += 1;
+    state.ordersSpawned += 1;
   }
 
   function startDay(day) {
@@ -159,7 +170,9 @@ export function createKitchen(random) {
     state.hearts = HEARTS;
     state.dayServed = 0;
     state.orders = [];
-    state.orderTimer = 2.5;
+    state.orderTimer = 5;
+    state.ordersSpawned = 0;
+    state.lastExpired = null;
     state.board = null;
     state.grill = [null, null];
     state.plate = [];
@@ -171,6 +184,7 @@ export function createKitchen(random) {
   }
 
   function endDay() {
+    if (state.dayOver) return;
     state.dayOver = true;
     state.stars = state.score >= STAR_TARGETS[2] ? 3 : state.score >= STAR_TARGETS[1] ? 2 : state.score >= STAR_TARGETS[0] ? 1 : 0;
     state.total += state.score;
@@ -178,6 +192,7 @@ export function createKitchen(random) {
   }
 
   function loseHeart(reason) {
+    if (state.dayOver) return reason;
     state.hearts -= 1;
     state.combo = 0;
     state.missed += 1;
@@ -189,11 +204,12 @@ export function createKitchen(random) {
   function step(dt) {
     let events = 0;
     if (state.dayOver) return events;
+    const wasOver = state.dayOver;
     state.elapsed += dt;
     state.timeLeft -= dt;
 
     // New orders arrive faster in the last 30 seconds: the dinner rush.
-    const gap = ORDER_GAP[state.day - 1] * (state.timeLeft < 30 ? 0.6 : 1);
+    const gap = ORDER_GAP[state.day - 1] * (state.timeLeft < 30 ? 0.75 : 1);
     state.orderTimer -= dt;
     if (state.orderTimer <= 0 && state.orders.length < MAX_ORDERS) {
       spawnOrder();
@@ -205,10 +221,19 @@ export function createKitchen(random) {
       order.patience -= dt;
       if (order.patience <= 0) {
         state.orders.splice(i, 1);
+        state.lastExpired = { dishId: order.dish.id, at: state.elapsed };
         ping(1120, 120, 'Walked out!', 'bad');
         events |= EVENT_MISS;
         loseHeart('expired');
       }
+    }
+
+    // D1: a hearts-0 end must raise EVENT_DAY_END exactly like the timer
+    // path does, or main.js never shows the day summary and the game
+    // soft-locks on the frozen play screen.
+    if (state.dayOver && !wasOver) {
+      events |= EVENT_DAY_END;
+      if (state.gameOver) events |= EVENT_GAME_OVER;
     }
 
     if (state.board && state.board.progress < CHOP_SECONDS) {
@@ -260,6 +285,9 @@ export function createKitchen(random) {
    * updated in place. Returns event flags.
    */
   function interact(chef) {
+    // D1: once the day is over the dead game takes no input — no serving
+    // frozen tickets for score after the summary should have appeared.
+    if (state.dayOver) return 0;
     const station = nearestStation(chef.x, chef.y);
     if (!station) return 0;
     const c = centre(STATIONS[station]);
@@ -361,6 +389,15 @@ export function createKitchen(random) {
           const earned = Math.round((dish.price + tip) * multiplier);
           state.score += earned;
           state.combo += 1;
+          // D2 (v5): every 2nd consecutive clean serve earns a heart back
+          // (up to the max). At every 3rd it never fired in live play —
+          // by the time a heart was lost, three clean serves in a row
+          // almost never happened before the next walk-out — so the
+          // rescue the rebalance promised did not exist for a real player.
+          if (state.combo % 2 === 0 && state.hearts < HEARTS) {
+            state.hearts += 1;
+            ping(c.x, STATIONS.serve.y + STATIONS.serve.height + 78, '♥ +1!', 'good');
+          }
           state.bestCombo = Math.max(state.bestCombo, state.combo);
           state.served += 1;
           state.dayServed += 1;
@@ -371,11 +408,25 @@ export function createKitchen(random) {
           if (state.combo >= 2) ping(c.x, STATIONS.serve.y + STATIONS.serve.height + 52, `Combo x${multiplier.toFixed(2).replace(/\.?0+$/, '')}!`, 'good');
           return EVENT_SERVE | EVENT_BELL;
         }
+        // D3: the dish matches no live ticket. If it is the dish whose
+        // ticket just walked out, the serve is simply too late — ring the
+        // bell, keep the dish, lose no heart. One ticket, one heart.
+        if (state.lastExpired && state.lastExpired.dishId === dishId
+          && state.elapsed - state.lastExpired.at < 15) {
+          ping(c.x, STATIONS.serve.y + STATIONS.serve.height + 26, 'Too late!', 'bad');
+          return EVENT_BELL;
+        }
         chef.carrying = null;
         state.carrying = null;
         ping(c.x, STATIONS.serve.y + STATIONS.serve.height + 26, 'Wrong dish!', 'bad');
         events |= EVENT_WRONG;
         loseHeart('wrong');
+        // D1: a hearts-0 end from a wrong dish must also raise the day-end
+        // event, or the summary screen never appears.
+        if (state.dayOver) {
+          events |= EVENT_DAY_END;
+          if (state.gameOver) events |= EVENT_GAME_OVER;
+        }
         return events;
       }
       return 0;
