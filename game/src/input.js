@@ -24,7 +24,7 @@ const MUTE = new Set(['KeyM']);
 const RETRY = new Set(['KeyR']);
 
 export function createInput(canvas) {
-  const keys = { up: false, down: false, left: false, right: false };
+  const keys = new Set();
   let actions = 0;
   let click = null;
 
@@ -35,10 +35,7 @@ export function createInput(canvas) {
     // flags never fight. Enter stays confirm-only.
     if (event.code === 'Space') {
       if (!event.repeat) actions |= ACTION_CONFIRM | ACTION_INTERACT;
-    } else if (UP.has(event.code)) keys.up = true;
-    else if (DOWN.has(event.code)) keys.down = true;
-    else if (LEFT.has(event.code)) keys.left = true;
-    else if (RIGHT.has(event.code)) keys.right = true;
+    } else if (UP.has(event.code) || DOWN.has(event.code) || LEFT.has(event.code) || RIGHT.has(event.code)) keys.add(event.code);
     else if (CONFIRM.has(event.code)) {
       if (!event.repeat) actions |= ACTION_CONFIRM;
     } else if (INTERACT.has(event.code)) {
@@ -53,17 +50,13 @@ export function createInput(canvas) {
     event.preventDefault();
   });
   window.addEventListener('keyup', (event) => {
-    if (UP.has(event.code)) keys.up = false;
-    else if (DOWN.has(event.code)) keys.down = false;
-    else if (LEFT.has(event.code)) keys.left = false;
-    else if (RIGHT.has(event.code)) keys.right = false;
+    keys.delete(event.code);
   });
   // A key released while the tab is hidden never sends keyup: let go on blur.
   window.addEventListener('blur', () => {
-    keys.up = false;
-    keys.down = false;
-    keys.left = false;
-    keys.right = false;
+    keys.clear();
+    actions = 0;
+    click = null;
   });
   canvas.addEventListener('pointerdown', (event) => {
     const rect = canvas.getBoundingClientRect();
@@ -77,9 +70,10 @@ export function createInput(canvas) {
   return {
     /** The held steering direction, each component -1, 0 or 1. */
     direction() {
+      const held = group => [...group].some(code => keys.has(code));
       return {
-        x: (keys.right ? 1 : 0) - (keys.left ? 1 : 0),
-        y: (keys.down ? 1 : 0) - (keys.up ? 1 : 0),
+        x: Number(held(RIGHT)) - Number(held(LEFT)),
+        y: Number(held(DOWN)) - Number(held(UP)),
       };
     },
     /** The one-shot presses since the last call, as ACTION_* flags. */
