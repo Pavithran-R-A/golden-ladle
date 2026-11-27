@@ -6,7 +6,9 @@
 <title>The Golden Ladle</title>
 <style>
   html, body { margin: 0; height: 100%; overflow: hidden; background: #2a1c10; }
-  #game { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+  /* v6: centred, not stretched — on a non-16:9 window the canvas keeps its
+     aspect and sits in the middle instead of anchoring top-left. */
+  #game { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); display: block; touch-action: none; }
   /* Read aloud, never shown: the status line screen readers announce. */
   #status { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 </style>

@@ -16,6 +16,7 @@ import {
   EVENT_BURNT,
   EVENT_CHOP_DONE,
   EVENT_DAY_END,
+  EVENT_ERROR,
   EVENT_GAME_OVER,
   EVENT_GRILL_DONE,
   EVENT_MISS,
@@ -64,6 +65,23 @@ function saveBest(value) {
   }
 }
 
+/** Best score on one day (v6, P2-9), kept per day in localStorage. */
+function readBestDay(day) {
+  try {
+    return Number.parseInt(window.localStorage.getItem(`${BEST_KEY}.day${day}`) ?? '0', 10) || 0;
+  } catch {
+    return 0;
+  }
+}
+
+function saveBestDay(day, value) {
+  try {
+    window.localStorage.setItem(`${BEST_KEY}.day${day}`, String(value));
+  } catch {
+    // As above: best lasts this visit only.
+  }
+}
+
 function runShot(name) {
   const scene = stageShot(name, kitchen, chef);
   let painted = 0;
@@ -85,6 +103,8 @@ function runGame() {
   let flash = 0;
   let pendingStation = null;
   let steamTimer = 0;
+  // v6: a read-only handle for live verification (screenshots, play-tests).
+  window.__game = { kitchen, chef, audio, getScreen: () => screen };
 
   function announce(message) {
     status.textContent = message;
@@ -97,42 +117,63 @@ function runGame() {
     state.served = 0;
     state.missed = 0;
     state.bestCombo = 0;
+    state.dayStars = {};
     state.gameOver = false;
     chef.reset();
     pendingStation = null;
   }
 
+  /** Run the title backdrop kitchen forward so the title sits over a
+   * live-looking kitchen (v6 P2-4: also re-seeds it after a full run, when
+   * the game-over screen would otherwise leave a dead Day 3 behind). */
+  function seedBackdrop() {
+    for (let i = 0; i < 240; i += 1) kitchen.step(STEP);
+  }
+
   function startGame() {
     resetRun();
     screen = SCREEN_PLAY;
+    audio.startMusic();
     announce(`${GAME_TITLE}. Day 1. Take the tickets, chop, grill, plate, serve.`);
   }
 
   function endDayScreen() {
     screen = SCREEN_DAY;
+    audio.stopMusic();
+    const state = kitchen.state;
+    if (state.score > readBestDay(state.day)) saveBestDay(state.day, state.score);
     announce(`Day ${kitchen.state.day} complete. Earned $${kitchen.state.score}.`);
   }
 
   // D9: retry the day just played — the failed day's score must come back
   // out of the running total first, or retrying would double-count it.
+  // v6: the day's walk-outs and best combo roll back too (kitchen tracks
+  // them per day now), and the RNG snapshot in startDay replays the same
+  // tickets, so a retry is the same day, not a harder one.
   function retryDay() {
     const state = kitchen.state;
     state.total -= state.score;
     state.served -= state.dayServed;
+    state.missed -= state.dayMissed;
+    state.bestCombo = state.bestComboAtDayStart;
     kitchen.startDay(state.day);
     chef.reset();
     screen = SCREEN_PLAY;
+    audio.startMusic();
     announce(`Day ${kitchen.state.day}, retry.`);
   }
 
   function backToTitle() {
     resetRun();
+    seedBackdrop();
     screen = SCREEN_TITLE;
+    audio.stopMusic();
     announce(`${GAME_TITLE}. Press Enter or click to start.`);
   }
 
   function endGameScreen() {
     screen = SCREEN_OVER;
+    audio.stopMusic();
     if (kitchen.state.total > best) {
       best = kitchen.state.total;
       saveBest(best);
@@ -172,6 +213,7 @@ function runGame() {
       audio.buzz();
       flash = 1;
     }
+    if (events & EVENT_ERROR) audio.buzz();
     if (events & EVENT_TRASH) audio.pop();
     if (events & EVENT_DAY_END) {
       audio.jingle();
@@ -227,6 +269,7 @@ function runGame() {
           kitchen.startDay(kitchen.state.day + 1);
           chef.reset();
           screen = SCREEN_PLAY;
+          audio.startMusic();
           announce(`Day ${kitchen.state.day}.`);
         } else {
           endGameScreen();
@@ -242,18 +285,20 @@ function runGame() {
       }
       if (actions & (ACTION_CONFIRM | ACTION_CLICK)) {
         audio.unlock();
-        screen = SCREEN_TITLE;
-        announce(`${GAME_TITLE}. Press Enter or click to start.`);
+        backToTitle();
       }
       return;
     }
     if (actions & ACTION_PAUSE && screen === SCREEN_PLAY) {
       screen = SCREEN_PAUSED;
+      audio.stopMusic();
       announce('Paused.');
       return;
     }
-    if (actions & (ACTION_PAUSE | ACTION_CONFIRM) && screen === SCREEN_PAUSED) {
+    // v6 (P2-3): a click resumes from pause too, not just P / Esc / Enter.
+    if (screen === SCREEN_PAUSED && (actions & (ACTION_PAUSE | ACTION_CONFIRM) || click)) {
       screen = SCREEN_PLAY;
+      audio.startMusic();
       announce('Playing.');
       return;
     }
@@ -322,13 +367,14 @@ function runGame() {
     // Grill sizzle follows how full the grill is.
     const cooking = kitchen.state.grill.filter((slot) => slot && slot.progress < GRILL_SECONDS).length;
     audio.setSizzle(cooking / 2);
-    renderer.draw({ state: kitchen.state, chef, screen, best, particles, flash });
+    renderer.draw({ state: kitchen.state, chef, screen, best, dayBest: readBestDay(kitchen.state.day), muted: audio.isMuted(), particles, flash });
   }
 
   // Leaving the tab pauses a running game rather than letting tickets expire unseen.
   document.addEventListener('visibilitychange', () => {
     if (document.hidden && screen === SCREEN_PLAY) {
       screen = SCREEN_PAUSED;
+      audio.stopMusic();
       announce('Paused.');
     }
   });

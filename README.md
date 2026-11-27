@@ -39,7 +39,7 @@ Tickets appear on the order board — each names a dish and a patience bar. Fetc
 - **Golden Smash Burger** — grilled patty + chopped tomato + cheese — $14
 - **Golden Tofu Bowl** — grilled tofu + chopped lettuce + cheese — $12
 
-Three days of 100 seconds each, with faster orders and shorter patience every day. Stars are earned per day at $55 / $85 / $120.
+Three days of 100 seconds each, with faster orders and shorter patience every day. Stars are earned per day at $55 / $85 / $110.
 
 ## Files
 

@@ -1,4 +1,4 @@
-// Every tuning number, colour and recipe for Golden Skillet in one place.
+// Every tuning number, colour and recipe for Golden Ladle in one place.
 // The playfield is a fixed 1280x720 logical area; the renderer scales it to the
 // window, so no rule below depends on the screen size.
 
@@ -13,28 +13,36 @@ export const DAY_SECONDS = 100;
 export const DAYS = 3;
 /** Hearts lost when an order expires or a wrong dish is served. */
 export const HEARTS = 3;
+/** Hearts at the start of each day: Day 3 gets a 4th heart (v6). */
+export const HEARTS_BY_DAY = [3, 3, 4];
 
 /** Earnings that earn 1, 2 and 3 stars at the end of each day. */
-export const STAR_TARGETS = [55, 85, 120];
+export const STAR_TARGETS = [55, 85, 110];
 
 export const CHEF = {
   radius: 26,
-  speed: 320,
+  speed: 420,
   startX: 640,
   startY: 520,
 };
 
 /** Seconds an order waits before its customer walks away, per day. */
-export const PATIENCE = [38, 38, 36];
+export const PATIENCE = [38, 44, 42];
 /** Seconds between new orders arriving, per day. */
 export const ORDER_GAP = [11, 12, 10];
 /** Most tickets on the board at once. */
 export const MAX_ORDERS = 3;
 
 /** Chopping takes this long; grilling takes this long, then burns after this long again. */
-export const CHOP_SECONDS = 1.2;
-export const GRILL_SECONDS = 3;
+export const CHOP_SECONDS = 0.8;
+export const GRILL_SECONDS = 2.5;
 export const BURN_SECONDS = 7;
+
+/** Rough seconds a competent sequential player needs to cook + serve each
+ * dish, at v6 pace (calibrated from the human-pace sim, not guessed): a
+ * ticket whose remaining patience is below this can no longer be finished,
+ * and the ticket flashes red to say so. */
+export const COOK_ESTIMATE = { salad: 18, corncup: 13, burger: 21, tofubowl: 21 };
 
 /** Combo: each clean serve in a row adds this much to the multiplier, up to this cap. */
 export const COMBO_STEP = 0.25;
@@ -132,8 +140,8 @@ export const PALETTE = {
   wall: '#f7e8c9',
   wallTrim: '#e8cfa0',
   floor: '#c98d5f',
-  floorDark: '#bb7f50',
-  floorLight: '#e0a878',
+  floorDark: '#c68a58',
+  floorLight: '#d69a68',
   floorGrout: '#9c6a3d',
   counterWood: '#a9713f',
   counterTop: '#c98f56',

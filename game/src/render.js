@@ -7,6 +7,7 @@
 import {
   BURN_SECONDS,
   CHOP_SECONDS,
+  COOK_ESTIMATE,
   DAY_SECONDS,
   DAYS,
   DISHES,
@@ -433,10 +434,15 @@ export function createRenderer(canvas) {
     text(ctx, "TODAY'S MENU", x + 110, y + 14, 12, '#ffd66b', 'center', 'bold');
     // D5: day-aware — only the dishes available today, in day order
     // (Day 1: Salad + Corn Cup; Day 2: + Burger; Day 3: + Tofu Bowl).
+    // v6 (P1-9): each line also shows the dish's ingredient icons, so the
+    // menu teaches the recipes instead of only names and prices.
     const dishes = DISHES.filter((d) => d.fromDay <= state.day);
     const step = dishes.length > 3 ? 13 : 14;
     const first = dishes.length > 3 ? 30 : 32;
-    dishes.forEach((d, i) => text(ctx, `${d.short}  $${d.price}`, x + 110, y + first + i * step, 12, '#fff8e7', 'center', 'normal'));
+    dishes.forEach((d, i) => {
+      d.needs.forEach((id, j) => drawIngredient(ctx, id, x + 20 + j * 15, y + first + i * step - 1, 12, 'ready'));
+      text(ctx, `${d.short}  $${d.price}`, x + 66, y + first + i * step, 12, '#fff8e7', 'left', 'normal');
+    });
   }
 
   function drawPantry(state, chef) {
@@ -456,8 +462,10 @@ export function createRenderer(canvas) {
       ctx.lineWidth = 2;
       rr(ctx, bin.x, bin.y, bin.width, bin.height, 6);
       ctx.stroke();
-      drawIngredient(ctx, bin.id, bin.x + 26, bin.y + 29, 34, 'raw');
-      text(ctx, bin.name, bin.x + 62, bin.y + 29, 12, PALETTE.text, 'center', 'bold');
+      drawIngredient(ctx, bin.id, bin.x + 18, bin.y + 29, 26, 'raw');
+      // v6 (P1-3): the name is left-aligned clear of the icon — the old
+      // centred text sat under the icon and "Tomato" read as "omato".
+      text(ctx, bin.name, bin.x + 36, bin.y + 29, 11, PALETTE.text, 'left', 'bold');
     }
     // D7: the label sits on a dark pill now, so it reads clear of the bins'
     // shadow instead of half-vanishing into the counter's bottom edge.
@@ -520,6 +528,41 @@ export function createRenderer(canvas) {
       ctx.ellipse(px, s.y + s.height + 1, 13, 3, 0, 0, Math.PI * 2);
       ctx.fill();
     }
+    // v6 (P1-8): a customer waits at the pass, face reacting to the oldest
+    // ticket — smiling while there is time, worried when a ticket is about
+    // to walk out — so the serve window is a person, not an empty counter.
+    const cx = s.x + 120;
+    const cy = s.y + s.height + 62;
+    const worst = state.orders.length
+      ? Math.min(...state.orders.map((o) => o.patience / o.maxPatience)) : 1;
+    const worried = state.orders.length > 0 && worst <= 0.25;
+    const calm = state.orders.length === 0 || worst > 0.5;
+    ctx.fillStyle = '#5a7fb5';
+    rr(ctx, cx - 16, cy, 32, 34, 12);
+    ctx.fill();
+    ctx.fillStyle = '#f2c9a0';
+    ctx.beginPath();
+    ctx.arc(cx, cy - 12, 14, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#3a2a1a';
+    ctx.beginPath();
+    ctx.arc(cx - 5, cy - 13, 1.8, 0, Math.PI * 2);
+    ctx.arc(cx + 5, cy - 13, 1.8, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#3a2a1a';
+    ctx.lineWidth = 1.8;
+    ctx.beginPath();
+    if (worried) ctx.arc(cx, cy + 2, 6, 1.15 * Math.PI, 1.85 * Math.PI);
+    else if (calm) ctx.arc(cx, cy - 8, 6, 0.15 * Math.PI, 0.85 * Math.PI);
+    else { ctx.moveTo(cx - 5, cy - 4); ctx.lineTo(cx + 5, cy - 4); }
+    ctx.stroke();
+    if (worried) {
+      ctx.fillStyle = '#7ab8e8';
+      ctx.beginPath();
+      ctx.arc(cx + 16, cy - 26, 3.5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    if (worried) text(ctx, 'HURRY!', cx, cy + 48, 11, PALETTE.danger, 'center', 'bold');
   }
 
   function drawBoard(state) {
@@ -533,17 +576,24 @@ export function createRenderer(canvas) {
     // The label sits on the wooden top edge, in light cream: at s.y+14 it
     // straddled the inner board's top edge and read as half-cut.
     text(ctx, 'CHOP', s.x + s.width / 2, s.y + 7, 10, '#e8d9b8', 'center', 'bold');
-    if (state.board) {
-      const item = state.board.item;
-      const progress = Math.min(1, state.board.progress / CHOP_SECONDS);
-      drawIngredient(ctx, item.ingredient, s.x + s.width / 2, s.y + 52, 44, progress >= 1 ? 'chopped' : 'raw');
+    // v6: two chopping slots side by side, each with its own progress bar.
+    const slotCentres = [s.x + 60, s.x + 180];
+    let anyBoard = false;
+    ['board', 'board2'].forEach((key, i) => {
+      const slot = state[key];
+      if (!slot) return;
+      anyBoard = true;
+      const item = slot.item;
+      const progress = Math.min(1, slot.progress / CHOP_SECONDS);
+      drawIngredient(ctx, item.ingredient, slotCentres[i], s.y + 52, 44, progress >= 1 ? 'chopped' : 'raw');
       ctx.fillStyle = '#3a2a1a';
-      rr(ctx, s.x + 30, s.y + s.height - 18, s.width - 60, 8, 4);
+      rr(ctx, slotCentres[i] - 40, s.y + s.height - 18, 80, 8, 4);
       ctx.fill();
       ctx.fillStyle = progress >= 1 ? PALETTE.green : PALETTE.gold;
-      rr(ctx, s.x + 30, s.y + s.height - 18, (s.width - 60) * progress, 8, 4);
+      rr(ctx, slotCentres[i] - 40, s.y + s.height - 18, 80 * progress, 8, 4);
       ctx.fill();
-    } else {
+    });
+    if (!anyBoard) {
       // The knife, resting.
       ctx.strokeStyle = '#c8d2dc';
       ctx.lineWidth = 6;
@@ -783,17 +833,21 @@ export function createRenderer(canvas) {
     ctx.restore();
   }
 
-  function drawTicket(order, index) {
+  function drawTicket(order, index, elapsed) {
     const x = TICKETS.x + index * (TICKETS.width + TICKETS.gap);
     const y = TICKETS.y;
     const w = TICKETS.width;
     const h = TICKETS.height;
     const share = Math.max(0, order.patience / order.maxPatience);
+    // v6 (P0-5): a ticket that can no longer be finished flashes a red
+    // border and says so — the survival skill, taught on the ticket itself.
+    const doomed = order.patience < (COOK_ESTIMATE[order.dish.id] || 20);
+    const flashing = doomed && Math.floor((elapsed || 0) * 4) % 2 === 0;
     ctx.fillStyle = PALETTE.ticket;
     rr(ctx, x, y, w, h, 8);
     ctx.fill();
-    ctx.strokeStyle = PALETTE.ticketEdge;
-    ctx.lineWidth = 2;
+    ctx.strokeStyle = flashing ? PALETTE.danger : PALETTE.ticketEdge;
+    ctx.lineWidth = flashing ? 3 : 2;
     rr(ctx, x, y, w, h, 8);
     ctx.stroke();
     // Hanging pin.
@@ -813,10 +867,11 @@ export function createRenderer(canvas) {
     ctx.fillStyle = share > 0.5 ? PALETTE.green : share > 0.25 ? PALETTE.gold : PALETTE.danger;
     rr(ctx, x + 100, y + 38, 104 * share, 10, 5);
     ctx.fill();
-    if (share <= 0.25) text(ctx, 'HURRY!', x + 152, y + 58, 10, PALETTE.danger, 'center', 'bold');
+    if (doomed) text(ctx, "✕ CAN'T FINISH", x + 152, y + 58, 10, PALETTE.danger, 'center', 'bold');
+    else if (share <= 0.25) text(ctx, 'HURRY!', x + 152, y + 58, 10, PALETTE.danger, 'center', 'bold');
   }
 
-  function drawHud(state) {
+  function drawHud(state, muted) {
     ctx.fillStyle = PALETTE.hud;
     ctx.fillRect(0, 0, FIELD.width, 52);
     text(ctx, `DAY ${state.day}/${DAYS}`, 70, 26, 16, '#ffd66b', 'center', 'bold');
@@ -836,20 +891,29 @@ export function createRenderer(canvas) {
     text(ctx, `SCORE $${state.score}`, 700, 26, 18, '#fff8e7', 'center', 'bold');
     if (state.combo >= 2) {
       const mult = 1 + 0.25 * Math.min(state.combo, 4);
+      const next = 1 + 0.25 * Math.min(state.combo + 1, 4);
       ctx.fillStyle = '#e4574b';
-      rr(ctx, 800, 12, 120, 28, 14);
+      rr(ctx, 790, 12, 180, 28, 14);
       ctx.fill();
-      text(ctx, `COMBO x${mult.toFixed(2).replace(/\.?0+$/, '')}`, 860, 27, 15, '#fff8e7', 'center', 'bold');
+      // v6 (P2-8): the pill names the next serve's multiplier, not just
+      // the current one, so the combo reads as something to protect.
+      text(ctx, `COMBO x${mult.toFixed(2).replace(/\.?0+$/, '')} · next x${next.toFixed(2).replace(/\.?0+$/, '')}`, 880, 27, 13, '#fff8e7', 'center', 'bold');
     }
-    // Hearts.
-    for (let i = 0; i < 3; i += 1) {
-      text(ctx, '♥', 1000 + i * 30, 27, 22, i < state.hearts ? '#ff6b6b' : '#5a4632', 'center', 'bold');
+    // Hearts: loops to the day's max (v6: 4 on Day 3), and a lost heart is
+    // an outlined ♡ in a readable tan (v6 P2-2), not a dark heart on a dark HUD.
+    const maxHearts = state.maxHearts || 3;
+    const heartX0 = maxHearts > 3 ? 985 : 1000;
+    for (let i = 0; i < maxHearts; i += 1) {
+      const got = i < state.hearts;
+      text(ctx, got ? '♥' : '♡', heartX0 + i * 30, 27, 22, got ? '#ff6b6b' : '#a08a68', 'center', 'bold');
     }
     // The running total across all days so far, today included: on day 1 the
     // old "TOTAL $0" sat next to "SCORE $57" and read as a bug. D8: once the
     // day is over, endDay() has already folded the day's score into total,
     // so adding it again here showed TOTAL = 2x SCORE on the summary.
     text(ctx, `TOTAL $${state.dayOver ? state.total : state.total + state.score}`, 1150, 26, 15, '#ffd66b', 'center', 'bold');
+    // v6 (P1-10): the mute state is visible — M toggles with an indicator now.
+    if (muted) text(ctx, '♪ MUTED', 1270, 26, 12, '#ff9a7a', 'right', 'bold');
   }
 
   function drawPings(state) {
@@ -871,7 +935,7 @@ export function createRenderer(canvas) {
     drawPlating(state);
     drawTrash();
     // Ticket row.
-    state.orders.forEach((order, i) => drawTicket(order, i));
+    state.orders.forEach((order, i) => drawTicket(order, i, state.elapsed));
     const hurried = state.orders.some((o) => o.patience / o.maxPatience <= 0.25);
     drawChef(chef, hurried);
     drawPings(state);
@@ -922,15 +986,19 @@ export function createRenderer(canvas) {
     text(ctx, 'Press Enter or click anywhere', 640, 700, 15, '#ffe9c4', 'center', 'normal');
   }
 
-  function drawDaySummary(state) {
+  function drawDaySummary(state, dayBest) {
     drawKitchen(state, { x: 640, y: 420, moving: false, bob: 0, facing: 1, carrying: null });
     drawPanel(390, 150, 500, 400);
-    text(ctx, `Day ${state.day} complete!`, 640, 200, 34, PALETTE.text, 'center', 'bold');
+    // v6 (P2-1): a hearts-0 day says it failed instead of "complete!".
+    const failed = state.hearts <= 0;
+    text(ctx, failed ? `Day ${state.day} failed — out of hearts!` : `Day ${state.day} complete!`, 640, 200, failed ? 28 : 34, failed ? '#a33c2e' : PALETTE.text, 'center', 'bold');
     drawStars(640, 260, state.stars, 44);
     text(ctx, `Earned today: $${state.score}`, 640, 320, 22, PALETTE.text, 'center', 'bold');
-    text(ctx, `Served ${state.dayServed}  •  Walked out ${state.missed}`, 640, 352, 18, PALETTE.muted, 'center', 'normal');
-    text(ctx, `Best combo x${(1 + 0.25 * Math.min(state.bestCombo, 4)).toFixed(2).replace(/\.?0+$/, '')}`, 640, 380, 18, PALETTE.muted, 'center', 'normal');
+    // v6 (P1-1): the day's own walk-outs and best combo, not the run's totals.
+    text(ctx, `Served ${state.dayServed}  •  Walked out ${state.dayMissed}`, 640, 352, 18, PALETTE.muted, 'center', 'normal');
+    text(ctx, `Best combo x${(1 + 0.25 * Math.min(state.dayBestCombo, 4)).toFixed(2).replace(/\.?0+$/, '')}`, 640, 380, 18, PALETTE.muted, 'center', 'normal');
     text(ctx, `Star targets: $${STAR_TARGETS[0]} / $${STAR_TARGETS[1]} / $${STAR_TARGETS[2]}`, 640, 412, 15, PALETTE.muted, 'center', 'normal');
+    if (dayBest) text(ctx, `Best Day ${state.day}: $${dayBest}`, 640, 434, 15, '#7a4d12', 'center', 'normal');
     text(ctx, state.day < DAYS ? 'Press Enter for the next day' : 'Press Enter for your total', 640, 452, 20, '#a33c2e', 'center', 'bold');
     text(ctx, 'R retries the day  •  Esc goes back to the title', 640, 480, 15, PALETTE.muted, 'center', 'normal');
     // D9: Retry + Back-to-Title buttons, so a failed day is never a dead end.
@@ -949,10 +1017,16 @@ export function createRenderer(canvas) {
     drawPanel(390, 140, 500, 430);
     text(ctx, 'Service complete!', 640, 195, 34, PALETTE.text, 'center', 'bold');
     text(ctx, 'Three days, one golden ladle.', 640, 232, 18, PALETTE.muted, 'center', 'normal');
-    drawStars(640, 285, state.stars, 40);
+    // v6 (P1-1): total stars across all three days, not just Day 3's.
+    const dayStars = state.dayStars || {};
+    const totalStars = Object.values(dayStars).reduce((a, b) => a + b, 0) || state.stars;
+    drawStars(640, 285, totalStars, 40);
     text(ctx, `Total earned: $${state.total}`, 640, 340, 26, PALETTE.text, 'center', 'bold');
     text(ctx, `Best total: $${Math.max(best, state.total)}`, 640, 375, 20, '#7a4d12', 'center', 'bold');
     text(ctx, `Dishes served: ${state.served}  •  Best combo x${(1 + 0.25 * Math.min(state.bestCombo, 4)).toFixed(2).replace(/\.?0+$/, '')}`, 640, 410, 18, PALETTE.muted, 'center', 'normal');
+    if (dayStars[1] !== undefined) {
+      text(ctx, `Stars: Day 1 ${'★'.repeat(dayStars[1] || 0) || '–'}  •  Day 2 ${'★'.repeat(dayStars[2] || 0) || '–'}  •  Day 3 ${'★'.repeat(dayStars[3] || 0) || '–'}`, 640, 442, 18, PALETTE.muted, 'center', 'normal');
+    }
     text(ctx, 'Press Enter to cook again', 640, 490, 20, '#a33c2e', 'center', 'bold');
   }
 
@@ -966,13 +1040,13 @@ export function createRenderer(canvas) {
   return {
     draw(view) {
       ctx.clearRect(0, 0, FIELD.width, FIELD.height);
-      const { state, chef, screen, best, particles } = view;
+      const { state, chef, screen, best, dayBest, muted, particles } = view;
       if (screen === SCREEN_TITLE) {
         drawTitle(state, best);
         return;
       }
       if (screen === SCREEN_DAY) {
-        drawDaySummary(state);
+        drawDaySummary(state, dayBest);
         return;
       }
       if (screen === SCREEN_OVER) {
@@ -981,7 +1055,7 @@ export function createRenderer(canvas) {
       }
       // The floor paints the top strip, so the HUD goes on after the kitchen.
       drawKitchen(state, chef);
-      drawHud(state);
+      drawHud(state, muted);
       if (particles) particles.draw(ctx);
       if (screen === SCREEN_PAUSED) drawPaused();
       if (view.flash > 0) {

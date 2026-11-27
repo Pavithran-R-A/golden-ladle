@@ -29,7 +29,13 @@ export function createInput(canvas) {
   let click = null;
 
   window.addEventListener('keydown', (event) => {
-    if (UP.has(event.code)) keys.up = true;
+    // v6: Space is BOTH confirm and interact — on menus it starts/advances
+    // (CONFIRM), in play it uses the nearest station (INTERACT). The loop
+    // only reads INTERACT during play and only CONFIRM on menus, so the two
+    // flags never fight. Enter stays confirm-only.
+    if (event.code === 'Space') {
+      if (!event.repeat) actions |= ACTION_CONFIRM | ACTION_INTERACT;
+    } else if (UP.has(event.code)) keys.up = true;
     else if (DOWN.has(event.code)) keys.down = true;
     else if (LEFT.has(event.code)) keys.left = true;
     else if (RIGHT.has(event.code)) keys.right = true;
