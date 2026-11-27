@@ -6,7 +6,7 @@
 // ?seed=N fixes the order of tickets. ?shot=start|play|serve|end (with &seed=N)
 // stages that scene instead of running the loop, paints it twice and sets
 // window.__shotReady for a screenshot.
-import { BEST_KEY, GAME_TITLE, GRILL_SECONDS, STEP } from './config.js';
+import { BEST_KEY, DAYS, GAME_TITLE, GRILL_SECONDS, STEP } from './config.js';
 import { createRandom } from './random.js';
 import { createAudio } from './audio.js';
 import { createChef } from './chef.js';
@@ -158,6 +158,7 @@ function runGame() {
     state.bestCombo = state.bestComboAtDayStart;
     kitchen.startDay(state.day);
     chef.reset();
+    pendingStation = null;
     screen = SCREEN_PLAY;
     audio.startMusic();
     announce(`Day ${kitchen.state.day}, retry.`);
@@ -217,10 +218,8 @@ function runGame() {
     if (events & EVENT_TRASH) audio.pop();
     if (events & EVENT_DAY_END) {
       audio.jingle();
-      if (state.gameOver) endGameScreen();
-      else endDayScreen();
-    }
-    if (events & EVENT_GAME_OVER) endGameScreen();
+      endDayScreen();
+    } else if (events & EVENT_GAME_OVER) endGameScreen();
   }
 
   function handleActions() {
@@ -265,9 +264,10 @@ function runGame() {
       }
       if (actions & (ACTION_CONFIRM | ACTION_CLICK)) {
         audio.unlock();
-        if (kitchen.state.day < 3) {
+        if (kitchen.state.day < DAYS) {
           kitchen.startDay(kitchen.state.day + 1);
           chef.reset();
+          pendingStation = null;
           screen = SCREEN_PLAY;
           audio.startMusic();
           announce(`Day ${kitchen.state.day}.`);
@@ -366,7 +366,7 @@ function runGame() {
     }
     // Grill sizzle follows how full the grill is.
     const cooking = kitchen.state.grill.filter((slot) => slot && slot.progress < GRILL_SECONDS).length;
-    audio.setSizzle(cooking / 2);
+    audio.setSizzle(screen === SCREEN_PLAY ? cooking / 2 : 0);
     renderer.draw({ state: kitchen.state, chef, screen, best, dayBest: readBestDay(kitchen.state.day), muted: audio.isMuted(), particles, flash });
   }
 
