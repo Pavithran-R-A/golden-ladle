@@ -177,12 +177,13 @@ export function createKitchen(random) {
   }
 
   function spawnOrder() {
-    const dishes = availableDishes();
+    const dishes = availableDishes().filter(dish => cookTime(dish.id) <= state.timeLeft);
+    if (!dishes.length) return false;
     // D4: on Day 3 the Tofu Bowl is the 3rd ticket, so it always appears
     // while the player still has hearts to cook it — never a 58 s lottery.
     let dish = dishes[Math.floor(random() * dishes.length)];
     if (state.day === 3 && state.ordersSpawned === 2) {
-      dish = DISHES.find((d) => d.id === 'tofubowl') || dish;
+      dish = dishes.find((d) => d.id === 'tofubowl') || dish;
     }
     // v6 dinner rush: tickets arriving in the last 30 s get longer patience,
     // so the rush is more orders, not more impossible ones.
@@ -196,6 +197,7 @@ export function createKitchen(random) {
     });
     state.nextOrderId += 1;
     state.ordersSpawned += 1;
+    return true;
   }
 
   /** RNG stream position at the start of each day, so a retry replays that
@@ -235,6 +237,7 @@ export function createKitchen(random) {
     state.dayOver = false;
     state.stars = 0;
     state.elapsed = 0;
+    state.pings = [];
   }
 
   function endDay() {
@@ -277,8 +280,7 @@ export function createKitchen(random) {
       if (allDoomed) {
         state.orderTimer = 2;
       } else {
-        spawnOrder();
-        state.orderTimer = gap;
+        state.orderTimer = spawnOrder() ? gap : 2;
       }
     }
 
@@ -296,6 +298,7 @@ export function createKitchen(random) {
         ping(1120, 120, 'Walked out!', 'bad');
         events |= EVENT_MISS;
         loseHeart('expired');
+        if (state.dayOver) break;
       }
     }
 
@@ -305,6 +308,7 @@ export function createKitchen(random) {
     if (state.dayOver && !wasOver) {
       events |= EVENT_DAY_END;
       if (state.gameOver) events |= EVENT_GAME_OVER;
+      return events;
     }
 
     // Both chopping boards work in parallel (v6: two slots).
@@ -478,6 +482,10 @@ export function createKitchen(random) {
         return EVENT_PICKUP;
       }
       if (chef.carrying && chef.carrying.type === 'ingredient') {
+        if (state.plateDish) {
+          ping(chef.x, chef.y - 50, 'Dish ready — serve it first!', 'bad');
+          return EVENT_ERROR;
+        }
         if (chef.carrying.state === 'burnt') {
           ping(chef.x, chef.y - 50, 'Burnt — trash it!', 'bad');
           return EVENT_ERROR;
@@ -497,8 +505,8 @@ export function createKitchen(random) {
         chef.carrying = null;
         state.carrying = null;
         const dish = dishForPlate(state.plate);
+        state.plateDish = dish;
         if (dish) {
-          state.plateDish = dish;
           ping(c.x, STATIONS.plating.y - 14, `${dish.short} ready!`, 'good');
           return EVENT_PLACE | EVENT_PLATE_READY;
         }
