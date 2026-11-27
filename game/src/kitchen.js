@@ -235,6 +235,7 @@ export function createKitchen(random) {
     state.plateDish = null;
     state.carrying = null;
     state.dayOver = false;
+    state.gameOver = false;
     state.stars = 0;
     state.elapsed = 0;
     state.pings = [];
